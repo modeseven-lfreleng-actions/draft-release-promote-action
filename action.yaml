@@ -2,38 +2,163 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
-# actions-template
-name: "🛠️ Actions Template"
-description: "Description of action"
-# Any relevant notes/observations can go here
+# promote-draft-release-action
+name: "⏫ Promote Draft Release"
+description: "Promotes a draft GitHub release to a full release"
+# When no inputs specified, defaults to most recent draft release
 
 inputs:
-  INPUT:
-    description: "Description of input"
+  # Mandatory
+  TOKEN:
+    description: 'GitHub Token with write content permissions'
+    required: true
+    type: 'string'
+  # Optional
+  LATEST:
+    description: 'Mark as the latest release'
     required: false
-    type: string
-    default: "input"
-
-outputs:
-  OUTPUT:
-    description: "Description of output"
-    value: ${{ steps.code.outputs.output }}
+    default: false
+    type: 'boolean'
+  TAG:
+    description: 'Tag of draft release to promote'
+    required: false
+    type: 'string'
+  NAME:
+    description: 'Name of draft release to promote'
+    required: false
+    type: 'string'
+  SORT_BY:
+    description: 'Sort releases by this field'
+    required: false
+    type: 'string'
+    default: 'none'
+  SORT_REVERSE:
+    # Note: reversal performed after sort_by operations
+    description: 'Reverse sorting order'
+    required: false
+    type: 'boolean'
+    default: 'false'
 
 runs:
   using: "composite"
   steps:
-    - name: "Friendly Name"
-      id: code
+    - name: "Capture draft releases in repository"
+      env:
+        GITHUB_TOKEN: ${{ inputs.TOKEN }}
       shell: bash
+      # yamllint disable rule:line-length
       run: |
-        # Friendly Name
-        INPUT="${{ inputs.input }}"
-        if [ -z "$INPUT" ]; then
-          echo "Error: mandatory input INPUT was not set/configured ❌"
+        # Capture draft releases in repository
+
+        tag="${{ inputs.tag }}"
+        name="${{ inputs.name }}"
+        sort_by="${{ inputs.sort_by }}"
+        sort_reverse="${{ inputs.sort_reverse }}"
+
+        # Note: GitHub token must have permissions: "content: write"
+        if [ -z "$GITHUB_TOKEN" ]; then
+          echo "Error: GitHub token not passed to action ❌"
           exit 1
         fi
 
-        echo "output=$INPUT" >> "$GITHUB_ENV"
-        echo "output=$INPUT" >> "$GITHUB_OUTPUT"
-        echo "Action received a valid input: $INPUT ✅"
-        echo "Action received a valid input: $INPUT ✅" >> "$GITHUB_STEP_SUMMARY"
+        # Check for JQ command
+        jq_cmd=$(which jq)
+        if [ ! -x "$jq_cmd" ]; then
+          echo "Error: jq command not found ❌"
+          exit 1
+        fi
+
+        # Valid sort options provided by:
+        #  gh release list --json [2025-04-18]
+        #   createdAt
+        #   isDraft
+        #   isLatest
+        #   isPrerelease
+        #   name
+        #   publishedAt
+        #   tagName
+
+        release_data=$(gh release list --json \
+          createdAt,isDraft,isLatest,isPrerelease,name,publishedAt,tagName)
+        if [ -z "$release_data" ]; then
+          echo "Error: GitHub CLI command returned no results ❌"
+          exit 1
+        elif [ "$ACTIONS_STEP_DEBUG" == 'true' ]; then
+          echo "Raw GitHub API query data 🐞"
+          echo "$release_data"
+        fi
+
+        drafts_only=$(echo $release_data | jq "[.[] | select(.isDraft==true)]")
+        if [ "$ACTIONS_STEP_DEBUG" == 'true' ]; then
+          echo "Selected draft releases 🐞"
+          echo "$drafts_only"
+        fi
+
+        if [ "$sort_by" != "none" ]; then
+          echo "Sorting releases by: $sort_by ⬇️"
+          drafts_only=$(echo "$drafts_only" | jq "sort_by(.$sort_by)")
+        fi
+        if [ "$sort_reverse" == "true" ]; then
+          echo "Reversing result order 🔄"
+          drafts_only=$(echo "$drafts_only" | jq '. | reverse')
+        fi
+
+        # Note: this is used when no tag/name are provided as inputs
+        # Starting point is the sorted set of data
+        selected_release="$drafts_only"
+        # Perform element selection based on inputs
+        if [ -n "$tag" ]; then
+          echo "Selecting release by tag 🏷️"
+          selected_release=$(echo "$selected_release" | jq "[.[] | select(.tagName==\"$tag\")]")
+        fi
+        # Selection/filter options can be stacked
+        if [ -n "$name" ]; then
+          echo "Selecting release by name 🔤"
+          selected_release=$(echo "$selected_release" | jq "[.[] | select(.name==\"$name\")]")
+        fi
+
+        # Return first result from whatever element(s) remain
+        selected_release=$(echo "$selected_release" | jq '.[0]')
+        if [ "$selected_release" = 'null' ]; then
+          echo "Error: GitHub CLI command returned no results ❌"
+          exit 1
+        elif [ "$ACTIONS_STEP_DEBUG" == 'true' ]; then
+          echo "Sorted GitHub API query data 🐞"
+          echo "$selected_release"
+        fi
+
+        # Promote release using tagName
+        tagName=$(echo "$selected_release" | jq '.tagName' | sed 's:"::g')
+        # Set release as latest if requested by input
+        if [ "${{ inputs.latest }}" = 'true' ]; then
+          release_url=$(gh release edit "$tagName" --draft=false --latest || true)
+        else
+          release_url=$(gh release edit "$tagName" --draft=false || true)
+        fi
+        if [ -n "$release_url" ]; then
+          echo "Release promoted: $release_url ✅"
+        else
+          echo "Error: GitHub CLI failed to promote release ❌"
+          exit 1
+        fi
+
+        # Validate marking of latest release
+        if [ "${{ inputs.latest }}" = 'true' ]; then
+          release_data=$(gh release list --json \
+            createdAt,isDraft,isLatest,isPrerelease,name,publishedAt,tagName)
+          latest_release=$(echo $release_data | jq "[.[] | select(.isLatest==true)]")
+          latest_tag=$(echo "$latest" | jq '.tagName' | sed 's:"::g')
+          if [ "$tagName" != "$latest_tag" ]; then
+            echo "Successfully designated latest release ✅"
+          else
+            echo "Failed to designate as latest release ❌"
+            exit 1
+          fi
+        fi
+
+        # Summary output
+        echo "# Promoted Draft Release ⏫" >> "$GITHUB_STEP_SUMMARY"
+        echo "$release_url" >> "$GITHUB_STEP_SUMMARY"
+        if [ "${{ inputs.latest }}" = 'true' ]; then
+          echo "Successfully designated latest release ✅" >> "$GITHUB_STEP_SUMMARY"
+        fi
