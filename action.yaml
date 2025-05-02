@@ -3,48 +3,48 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 # promote-draft-release-action
-name: "⏫ Promote Draft Release"
-description: "Promotes a draft GitHub release to a full release"
+name: '⏫ Promote Draft Release'
+description: 'Promotes a draft GitHub release to a full release'
 # When no inputs specified, defaults to most recent draft release
 
 inputs:
   # Mandatory
-  TOKEN:
+  token:
     description: 'GitHub Token with write content permissions'
     required: true
     type: 'string'
   # Optional
-  LATEST:
+  latest:
     description: 'Mark as the latest release'
     required: false
     default: false
     type: 'boolean'
-  TAG:
+  tag:
     description: 'Tag of draft release to promote'
     required: false
     type: 'string'
-  NAME:
+  name:
     description: 'Name of draft release to promote'
     required: false
     type: 'string'
-  SORT_BY:
+  sort_by:
     description: 'Sort releases by this field'
     required: false
     type: 'string'
     default: 'none'
-  SORT_REVERSE:
+  sort_reverse:
     # Note: reversal performed after sort_by operations
     description: 'Reverse sorting order'
     required: false
     type: 'boolean'
-    default: 'false'
+    default: false
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
-    - name: "Capture draft releases in repository"
+    - name: 'Capture draft releases in repository'
       env:
-        GITHUB_TOKEN: ${{ inputs.TOKEN }}
+        GITHUB_TOKEN: "${{ inputs.token }}"
       shell: bash
       # yamllint disable rule:line-length
       run: |
@@ -55,16 +55,16 @@ runs:
         sort_by="${{ inputs.sort_by }}"
         sort_reverse="${{ inputs.sort_reverse }}"
 
-        # Note: GitHub token must have permissions: "content: write"
+        # Note: GitHub token must have permissions "content: write"
         if [ -z "$GITHUB_TOKEN" ]; then
-          echo "Error: GitHub token not passed to action ❌"
+          echo 'Error: GitHub token not passed to action ❌'
           exit 1
         fi
 
         # Check for JQ command
         jq_cmd=$(which jq)
         if [ ! -x "$jq_cmd" ]; then
-          echo "Error: jq command not found ❌"
+          echo 'Error: jq command not found ❌'
           exit 1
         fi
 
@@ -81,25 +81,25 @@ runs:
         release_data=$(gh release list --json \
           createdAt,isDraft,isLatest,isPrerelease,name,publishedAt,tagName)
         if [ -z "$release_data" ]; then
-          echo "Error: GitHub CLI command returned no results ❌"
+          echo 'Error: GitHub CLI command returned no results ❌'
           exit 1
         elif [ "$ACTIONS_STEP_DEBUG" == 'true' ]; then
-          echo "Raw GitHub API query data 🐞"
+          echo 'Raw GitHub API query data 🐞'
           echo "$release_data"
         fi
 
         drafts_only=$(echo $release_data | jq "[.[] | select(.isDraft==true)]")
         if [ "$ACTIONS_STEP_DEBUG" == 'true' ]; then
-          echo "Selected draft releases 🐞"
+          echo 'Selected draft releases 🐞'
           echo "$drafts_only"
         fi
 
-        if [ "$sort_by" != "none" ]; then
+        if [ "$sort_by" != 'none' ]; then
           echo "Sorting releases by: $sort_by ⬇️"
           drafts_only=$(echo "$drafts_only" | jq "sort_by(.$sort_by)")
         fi
-        if [ "$sort_reverse" == "true" ]; then
-          echo "Reversing result order 🔄"
+        if [ "$sort_reverse" == 'true' ]; then
+          echo 'Reversing result order 🔄'
           drafts_only=$(echo "$drafts_only" | jq '. | reverse')
         fi
 
@@ -108,22 +108,22 @@ runs:
         selected_release="$drafts_only"
         # Perform element selection based on inputs
         if [ -n "$tag" ]; then
-          echo "Selecting release by tag 🏷️"
+          echo "Selecting release by tag: $tag 🏷️"
           selected_release=$(echo "$selected_release" | jq "[.[] | select(.tagName==\"$tag\")]")
         fi
         # Selection/filter options can be stacked
         if [ -n "$name" ]; then
-          echo "Selecting release by name 🔤"
+          echo "Selecting release by name: $name 🔤"
           selected_release=$(echo "$selected_release" | jq "[.[] | select(.name==\"$name\")]")
         fi
 
         # Return first result from whatever element(s) remain
         selected_release=$(echo "$selected_release" | jq '.[0]')
         if [ "$selected_release" = 'null' ]; then
-          echo "Error: GitHub CLI command returned no results ❌"
+          echo 'Error: GitHub CLI command returned no results ❌'
           exit 1
         elif [ "$ACTIONS_STEP_DEBUG" == 'true' ]; then
-          echo "Sorted GitHub API query data 🐞"
+          echo 'Sorted GitHub API query data 🐞'
           echo "$selected_release"
         fi
 
@@ -138,7 +138,7 @@ runs:
         if [ -n "$release_url" ]; then
           echo "Release promoted: $release_url ✅"
         else
-          echo "Error: GitHub CLI failed to promote release ❌"
+          echo 'Error: GitHub CLI failed to promote release ❌'
           exit 1
         fi
 
@@ -149,16 +149,16 @@ runs:
           latest_release=$(echo $release_data | jq "[.[] | select(.isLatest==true)]")
           latest_tag=$(echo "$latest" | jq '.tagName' | sed 's:"::g')
           if [ "$tagName" != "$latest_tag" ]; then
-            echo "Successfully designated latest release ✅"
+            echo "Successfully designated latest release: $tagName ✅"
           else
-            echo "Failed to designate as latest release ❌"
+            echo "Failed to designate $tagName as latest release ❌"
             exit 1
           fi
         fi
 
         # Summary output
-        echo "# Promoted Draft Release ⏫" >> "$GITHUB_STEP_SUMMARY"
+        echo "# Promoted Draft Release: $tagName ⏫" >> "$GITHUB_STEP_SUMMARY"
         echo "$release_url" >> "$GITHUB_STEP_SUMMARY"
         if [ "${{ inputs.latest }}" = 'true' ]; then
-          echo "Successfully designated latest release ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Successfully designated latest release ✅' >> "$GITHUB_STEP_SUMMARY"
         fi
