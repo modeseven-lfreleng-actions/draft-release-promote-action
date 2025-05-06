@@ -15,7 +15,7 @@ Promotes a draft GitHub release to a full release.
 
 ```yaml
 steps:
-  - name: "Promote Draft Release"
+  - name: 'Promote Draft Release'
     uses: lfreleng-actions/draft-release-promote-action@main
     with:
       TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -35,12 +35,12 @@ The token needs the following permissions:
 
 | Variable Name | Required | Description                            |
 | ------------- | -------- | -------------------------------------- |
-| TOKEN         | True     | GitHub token with relevant permissions |
-| LATEST        | False    | Mark as the latest release             |
-| TAG           | False    | Tag of draft release to promote        |
-| NAME          | False    | Name of draft release to promote       |
-| SORT_BY       | False    | Sort by this json element parameter    |
-| SORT_REVERSE  | False    | Reverse the sort order of results      |
+| token         | True     | GitHub token with relevant permissions |
+| latest        | False    | Mark as the latest release             |
+| tag           | False    | Tag of draft release to promote        |
+| name          | False    | Name of draft release to promote       |
+| sort_by       | False    | Sort by this json element parameter    |
+| sort_reverse  | False    | Reverse the sort order of results      |
 
 <!-- markdownlint-enable MD013 -->
 
