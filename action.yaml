@@ -39,10 +39,16 @@ inputs:
     type: 'boolean'
     default: false
 
+outputs:
+  release_url:
+    description: 'URL to the newly promoted release'
+    value: "${{ steps.promote-draft-release.outputs.release_url }}"
+
 runs:
   using: 'composite'
   steps:
     - name: 'Capture draft releases in repository'
+      id: promote-draft-release
       env:
         GITHUB_TOKEN: "${{ inputs.token }}"
       shell: bash
@@ -68,10 +74,10 @@ runs:
           exit 1
         fi
 
-        # Valid sort options provided by:
+        # Valid sort options provided by:
         #  gh release list --json [2025-04-18]
         #   createdAt
-        #   isDraft
+        #   isDraft
         #   isLatest
         #   isPrerelease
         #   name
@@ -98,7 +104,7 @@ runs:
           echo "Sorting releases by: $sort_by ⬇️"
           drafts_only=$(echo "$drafts_only" | jq "sort_by(.$sort_by)")
         fi
-        if [ "$sort_reverse" == 'true' ]; then
+        if [ "$sort_reverse" = 'true' ]; then
           echo 'Reversing result order 🔄'
           drafts_only=$(echo "$drafts_only" | jq '. | reverse')
         fi
@@ -162,3 +168,7 @@ runs:
         if [ "${{ inputs.latest }}" = 'true' ]; then
           echo 'Successfully designated latest release ✅' >> "$GITHUB_STEP_SUMMARY"
         fi
+
+        # Set output for use in subsequent steps
+        echo "release_url=$release_url" >> "$GITHUB_ENV"
+        echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
