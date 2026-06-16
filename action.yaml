@@ -12,37 +12,30 @@ inputs:
   token:
     description: 'GitHub Token with write content permissions'
     required: true
-    type: 'string'
   # Optional
   latest:
     description: 'Mark as the latest release'
     required: false
-    default: false
-    type: 'boolean'
+    default: 'false'
   tag:
     description: 'Tag of draft release to promote'
     required: false
-    type: 'string'
   name:
     description: 'Name of draft release to promote'
     required: false
-    type: 'string'
   sort_by:
     description: 'Sort releases by this field'
     required: false
-    type: 'string'
     default: 'none'
   sort_reverse:
     # Note: reversal performed after sort_by operations
     description: 'Reverse sorting order'
     required: false
-    type: 'boolean'
-    default: false
+    default: 'false'
   dry-run:
     description: 'Perform validation without promoting the release'
     required: false
-    type: 'boolean'
-    default: false
+    default: 'false'
 
 outputs:
   release_url:
