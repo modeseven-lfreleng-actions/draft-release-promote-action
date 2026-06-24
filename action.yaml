@@ -49,16 +49,23 @@ runs:
       id: promote-draft-release
       env:
         GITHUB_TOKEN: "${{ inputs.token }}"
+        INPUT_TAG: "${{ inputs.tag }}"
+        INPUT_NAME: "${{ inputs.name }}"
+        INPUT_SORT_BY: "${{ inputs.sort_by }}"
+        INPUT_SORT_REVERSE: "${{ inputs.sort_reverse }}"
+        INPUT_DRY_RUN: "${{ inputs['dry-run'] }}"
+        INPUT_LATEST: "${{ inputs.latest }}"
+        GH_REPOSITORY: "${{ github.repository }}"
       shell: bash
       # yamllint disable rule:line-length
       run: |
         # Capture draft releases in repository
 
-        tag="${{ inputs.tag }}"
-        name="${{ inputs.name }}"
-        sort_by="${{ inputs.sort_by }}"
-        sort_reverse="${{ inputs.sort_reverse }}"
-        dry_run="${{ inputs.dry-run }}"
+        tag="$INPUT_TAG"
+        name="$INPUT_NAME"
+        sort_by="$INPUT_SORT_BY"
+        sort_reverse="$INPUT_SORT_REVERSE"
+        dry_run="$INPUT_DRY_RUN"
 
         # Validate prerequisites
         if [ -z "$GITHUB_TOKEN" ]; then
@@ -129,8 +136,8 @@ runs:
         if [ "$dry_run" = 'true' ]; then
           # URL encode the tag name for dry-run URL construction
           encoded_tag=$(printf %s "$tagName" | jq -sRr @uri)
-          release_url="https://github.com/${{ github.repository }}/releases/tag/$encoded_tag"
-          if [ "${{ inputs.latest }}" = 'true' ]; then
+          release_url="https://github.com/$GH_REPOSITORY/releases/tag/$encoded_tag"
+          if [ "$INPUT_LATEST" = 'true' ]; then
             echo "Dry-run: Would promote $tagName and set as latest"
             echo "## 🔍 Dry Run: $tagName" >> "$GITHUB_STEP_SUMMARY"
             echo "Would promote to latest release" >> "$GITHUB_STEP_SUMMARY"
@@ -141,7 +148,7 @@ runs:
           fi
         else
           # Promote the release (gh release edit doesn't return URL)
-          if [ "${{ inputs.latest }}" = 'true' ]; then
+          if [ "$INPUT_LATEST" = 'true' ]; then
             gh release edit "$tagName" --draft=false --latest
           else
             gh release edit "$tagName" --draft=false
@@ -149,12 +156,11 @@ runs:
 
           # Construct the release URL
           encoded_tag=$(printf %s "$tagName" | jq -sRr @uri)
-          release_url="https://github.com/${{ github.repository }}/releases/tag/$encoded_tag"
+          release_url="https://github.com/$GH_REPOSITORY/releases/tag/$encoded_tag"
           echo "Promoted: $release_url ✅"
           echo "## ⏫ Promoted: $tagName" >> "$GITHUB_STEP_SUMMARY"
           echo "$release_url" >> "$GITHUB_STEP_SUMMARY"
         fi
 
         # Set outputs
-        echo "release_url=$release_url" >> "$GITHUB_ENV"
         echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
